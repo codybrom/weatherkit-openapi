@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WeatherKit API Documentation</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.6.1/jsrsasign-all-min.js"></script>
+    <!-- Add Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configure Tailwind for Swagger UI compatibility
+        tailwind.config = {
+            important: true,
+            corePlugins: {
+                preflight: false, // Disable preflight to avoid conflicts with Swagger UI
+            }
+        }
+    </script>
+    <script>
+        // Replace the existing collapsible panel script with this improved version
+        document.addEventListener('DOMContentLoaded', () => {
+            const jwtPanel = document.getElementById('jwt-panel');
+            const header = document.getElementById('jwt-panel-header');
+            const toggleBtn = document.getElementById('toggle-jwt-panel');
+            const body = document.body;
+
+            // Start collapsed by default if not explicitly set otherwise
+            if (localStorage.getItem('weatherkit-panel-collapsed') !== 'false') {
+                document.getElementById('jwt-panel-content').classList.add('hidden');
+                toggleBtn.textContent = '▼';
+            }
+
+            // Toggle panel function
+            function togglePanel() {
+                const content = document.getElementById('jwt-panel-content');
+                const isHidden = content.classList.contains('hidden');
+
+                if (isHidden) {
+                    // Expand
+                    content.classList.remove('hidden');
+                    jwtPanel.classList.add('fixed', 'inset-0', 'z-50', 'overflow-y-auto');
+                    body.classList.add('pt-screen'); // Push content down
+                    toggleBtn.textContent = '▲';
+                } else {
+                    // Collapse
+                    content.classList.add('hidden');
+                    jwtPanel.classList.remove('fixed', 'inset-0', 'z-50', 'overflow-y-auto');
+                    body.classList.remove('pt-screen');
+                    toggleBtn.textContent = '▼';
+                }
+
+                // Save state
+                localStorage.setItem('weatherkit-panel-collapsed', !isHidden);
+            }
+
+            // Add click events
+            header.addEventListener('click', (e) => {
+                // Don't toggle if clicking a form input inside the header
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+                    togglePanel();
+                }
+            });
+
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent double toggle from header click
+                togglePanel();
+            });
+
+            // Allow closing with Escape key when expanded
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !document.getElementById('jwt-panel-content').classList.contains('hidden')) {
+                    togglePanel();
+                }
+            });
+        });
+    </script>
+</head>
+
+<body class="m-0 p-0 font-sans">
+    <div id="jwt-panel" class="bg-gray-50 border-b border-gray-200 p-5 transition-all duration-300 ease-in-out">
+        <div id="jwt-panel-header"
+            class="flex justify-between items-center cursor-pointer p-1 rounded hover:bg-gray-200">
+            <h3 class="m-0 text-gray-800 font-semibold">🔐 Generate JWT Token for WeatherKit</h3>
+            <button id="toggle-jwt-panel"
+                class="bg-transparent border-0 text-base cursor-pointer p-2 text-gray-600 transition-transform duration-200"
+                title="Collapse panel">▲</button>
+        </div>
+        <div id="jwt-panel-content" class="mt-4">
+            <form id="jwtForm">
+                <div class="flex gap-4 mb-4">
+                    <div class="flex-1">
+                        <label for="teamId" class="block text-sm font-medium text-gray-700 mb-1">Team ID</label>
+                        <input id="teamId" placeholder="10-character Team ID"
+                            class="w-full p-2 border border-gray-300 rounded text-sm" />
+                    </div>
+                    <div class="flex-1">
+                        <label for="serviceId" class="block text-sm font-medium text-gray-700 mb-1">Service ID</label>
+                        <input id="serviceId" placeholder="e.g., com.example.weatherkit-client"
+                            class="w-full p-2 border border-gray-300 rounded text-sm" />
+                    </div>
+                    <div class="flex-1">
+                        <label for="keyId" class="block text-sm font-medium text-gray-700 mb-1">Key ID</label>
+                        <input id="keyId" placeholder="10-character Key ID"
+                            class="w-full p-2 border border-gray-300 rounded text-sm" />
+                    </div>
+                </div>
+                <div class="flex gap-4 mb-4">
+                    <div class="flex-1">
+                        <label for="privateKeyFile" class="block text-sm font-medium text-gray-700 mb-1">Private Key
+                            File (.p8)</label>
+                        <input type="file" id="privateKeyFile" accept=".p8,.key,.pem" class="w-full p-2 text-sm" />
+                    </div>
+                    <div class="flex-1 flex items-end">
+                        <button type="submit"
+                            class="bg-blue-600 text-white px-4 py-2 rounded font-medium text-sm hover:bg-blue-700 transition duration-200">Generate
+                            & Apply JWT</button>
+                    </div>
+                </div>
+            </form>
+            <div id="statusMessage" class="mt-4 p-3 rounded text-sm hidden"></div>
+
+            <div id="tokenSection" class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded hidden">
+                <h4 class="mt-0 text-base text-gray-700 font-medium flex items-center">
+                    Generated JWT Token:
+                    <span id="tokenStatus"
+                        class="ml-2 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Valid</span>
+                </h4>
+                <div id="tokenDisplay"
+                    class="font-mono text-sm leading-relaxed break-all whitespace-pre-wrap bg-gray-100 p-3 rounded max-h-24 overflow-y-auto">
+                </div>
+            </div>
+
+            <div id="commandSection" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded hidden">
+                <h4 class="mt-0 text-base text-blue-800 font-medium">Use this token with the following examples:</h4>
+
+                <div class="flex border-b border-blue-200">
+                    <div class="code-tab py-2 px-4 bg-gray-200 border border-blue-200 border-b-0 rounded-t mr-1 cursor-pointer text-sm font-medium active"
+                        data-tab="curl">curl</div>
+                    <div class="code-tab py-2 px-4 bg-gray-200 border border-blue-200 border-b-0 rounded-t mr-1 cursor-pointer text-sm font-medium"
+                        data-tab="swift">Swift</div>
+                    <div class="code-tab py-2 px-4 bg-gray-200 border border-blue-200 border-b-0 rounded-t mr-1 cursor-pointer text-sm font-medium"
+                        data-tab="js">JavaScript</div>
+                    <div class="code-tab py-2 px-4 bg-gray-200 border border-blue-200 border-b-0 rounded-t mr-1 cursor-pointer text-sm font-medium"
+                        data-tab="python">Python</div>
+                </div>
+
+                <div class="border border-blue-200 rounded-b">
+                    <div class="tab-pane block" id="curl-content">
+                        <div id="curlCommand"
+                            class="font-mono text-sm leading-normal bg-gray-900 text-gray-50 p-3 rounded-b overflow-x-auto relative whitespace-pre">
+                            <button
+                                class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700"
+                                id="copyCurlBtn">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden" id="swift-content">
+                        <div id="swiftCommand"
+                            class="font-mono text-sm leading-normal bg-gray-900 text-gray-50 p-3 rounded-b overflow-x-auto relative whitespace-pre">
+                            <button
+                                class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700"
+                                id="copySwiftBtn">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden" id="js-content">
+                        <div id="jsCommand"
+                            class="font-mono text-sm leading-normal bg-gray-900 text-gray-50 p-3 rounded-b overflow-x-auto relative whitespace-pre">
+                            <button
+                                class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700"
+                                id="copyJsBtn">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden" id="python-content">
+                        <div id="pythonCommand"
+                            class="font-mono text-sm leading-normal bg-gray-900 text-gray-50 p-3 rounded-b overflow-x-auto relative whitespace-pre">
+                            <button
+                                class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700"
+                                id="copyPythonBtn">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r text-sm text-gray-800 leading-relaxed">
+                <strong>Note:</strong> This tool generates a JWT token signed with your private key to authorize calls
+                to the WeatherKit API.
+                <p>If you're encountering 401 errors, make sure:</p>
+                <ul class="pl-5 list-disc">
+                    <li>Your WeatherKit service has been properly provisioned in your developer account</li>
+                    <li>The private key file is the correct one for WeatherKit (not a different service)</li>
+                    <li>The Team ID, Service ID, and Key ID are all entered correctly</li>
+                    <li>Your service ID is enabled for WeatherKit in your developer account</li>
+                </ul>
+                <p>The browser-based testing function doesn't work due to CORS restrictions. Use the provided example
+                    code instead.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="swagger-ui"></div>
+
+    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>
+
+    <script>
+        // Initialize Swagger UI with request interceptor to fix headers
+        const ui = SwaggerUIBundle({
+            url: "weatherkit.yaml",
+            dom_id: "#swagger-ui",
+            deepLinking: true,
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+            ],
+            plugins: [
+                SwaggerUIBundle.plugins.DownloadUrl
+            ],
+            layout: "StandaloneLayout",
+            requestInterceptor: (req) => {
+                // Fix Authorization header if needed
+                if (req.headers && req.headers.Authorization) {
+                    // Make sure it has the Bearer prefix only once
+                    if (req.headers.Authorization.startsWith('Bearer Bearer ')) {
+                        req.headers.Authorization = req.headers.Authorization.replace('Bearer Bearer ', 'Bearer ');
+                    }
+                }
+                return req;
+            }
+        });
+
+        // Load saved credentials
+        document.addEventListener('DOMContentLoaded', () => {
+            const teamId = localStorage.getItem('weatherkit-teamId');
+            const serviceId = localStorage.getItem('weatherkit-serviceId');
+            const keyId = localStorage.getItem('weatherkit-keyId');
+
+            if (teamId) document.getElementById("teamId").value = teamId;
+            if (serviceId) document.getElementById("serviceId").value = serviceId;
+            if (keyId) document.getElementById("keyId").value = keyId;
+
+            // Apply saved token if available
+            const savedToken = localStorage.getItem('weatherkit-jwt');
+            const savedExp = localStorage.getItem('weatherkit-exp');
+
+            if (savedToken && savedExp) {
+                const now = Math.floor(Date.now() / 1000);
+                const exp = parseInt(savedExp);
+
+                // Check if token is still valid
+                if (exp > now) {
+                    applyToken(savedToken, exp);
+                    document.getElementById('tokenDisplay').textContent = savedToken;
+                    document.getElementById('tokenSection').classList.remove('hidden');
+                    updateTokenStatus(exp);
+                    updateCodeExamples(savedToken);
+                } else {
+                    // Token expired
+                    document.getElementById('tokenStatus').textContent = 'Expired';
+                    document.getElementById('tokenStatus').className = 'ml-2 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800';
+                }
+            }
+
+            // Add copy button handlers
+            document.getElementById('copyCurlBtn').addEventListener('click', () => {
+                copyToClipboard('curlCommand');
+            });
+
+            document.getElementById('copySwiftBtn').addEventListener('click', () => {
+                copyToClipboard('swiftCommand');
+            });
+
+            document.getElementById('copyJsBtn').addEventListener('click', () => {
+                copyToClipboard('jsCommand');
+            });
+
+            document.getElementById('copyPythonBtn').addEventListener('click', () => {
+                copyToClipboard('pythonCommand');
+            });
+
+            // Setup tabs
+            document.querySelectorAll('.code-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs
+                    document.querySelectorAll('.code-tab').forEach(t => {
+                        t.classList.remove('bg-white', 'border-b-white');
+                        t.classList.add('bg-gray-200');
+                    });
+                    document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+
+                    // Add active class to current tab
+                    tab.classList.add('bg-white', 'border-b-white');
+                    tab.classList.remove('bg-gray-200');
+                    document.getElementById(`${tab.dataset.tab}-content`).classList.remove('hidden');
+                });
+            });
+
+            // Activate the first tab by default
+            document.querySelector('.code-tab').classList.add('bg-white', 'border-b-white');
+            document.querySelector('.code-tab').classList.remove('bg-gray-200');
+
+            // Start token expiration check
+            setInterval(checkTokenExpiration, 10000); // Check every 10 seconds
+        });
+
+        function showMessage(message, isError = false) {
+            const msgElement = document.getElementById('statusMessage');
+            msgElement.textContent = message;
+            msgElement.className = isError
+                ? 'mt-4 p-3 rounded text-sm bg-red-100 text-red-700 border border-red-200'
+                : 'mt-4 p-3 rounded text-sm bg-green-100 text-green-700 border border-green-200';
+            msgElement.classList.remove('hidden');
+
+            if (!isError) {
+                setTimeout(() => {
+                    msgElement.classList.add('hidden');
+                }, 7000);
+            }
+        }
+
+        function hideMessage() {
+            document.getElementById('statusMessage').classList.add('hidden');
+        }
+
+        // Copy code to clipboard
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            // Remove the copy button text from the content
+            let text = element.innerText;
+            text = text.replace(/Copy/g, '').trim();
+
+            navigator.clipboard.writeText(text).then(() => {
+                const button = element.querySelector('.copy-button');
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+
+        // Update token status badge
+        function updateTokenStatus(expTime) {
+            const now = Math.floor(Date.now() / 1000);
+            const tokenStatus = document.getElementById('tokenStatus');
+
+            if (expTime > now) {
+                // Calculate minutes remaining
+                const minutesLeft = Math.floor((expTime - now) / 60);
+                tokenStatus.textContent = `Valid (${minutesLeft}m left)`;
+                tokenStatus.className = 'ml-2 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800';
+            } else {
+                tokenStatus.textContent = 'Expired';
+                tokenStatus.className = 'ml-2 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800';
+            }
+        }
+
+        // Check if token is expired
+        function checkTokenExpiration() {
+            const savedExp = localStorage.getItem('weatherkit-exp');
+            if (savedExp) {
+                updateTokenStatus(parseInt(savedExp));
+            }
+        }
+
+        // Update code examples with the token
+        function updateCodeExamples(token) {
+            const curlCmd = document.getElementById('curlCommand');
+            const swiftCmd = document.getElementById('swiftCommand');
+            const jsCmd = document.getElementById('jsCommand');
+            const pythonCmd = document.getElementById('pythonCommand');
+
+            // Curl example - single line format
+            curlCmd.innerHTML = `curl -H "Authorization: Bearer ${token}" "https://weatherkit.apple.com/api/v1/weather/en-US/37.323/-122.032?dataSets=currentWeather"<button class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700" id="copyCurlBtn">Copy</button>`;
+
+            // Swift example
+            swiftCmd.innerHTML = `import Foundation
+
+let url = URL(string: "https://weatherkit.apple.com/api/v1/weather/en-US/37.323/-122.032?dataSets=currentWeather")!
+var request = URLRequest(url: url)
+request.addValue("Bearer ${token}", forHTTPHeaderField: "Authorization")
+
+URLSession.shared.dataTask(with: request) { data, response, error in
+    guard let data = data else {
+        print("Error: \\(error?.localizedDescription ?? "Unknown error")")
+        return
+    }
+    
+    do {
+        let json = try JSONSerialization.jsonObject(with: data)
+        print(json)
+    } catch {
+        print("Parsing error: \\(error)")
+    }
+}.resume()<button class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700" id="copySwiftBtn">Copy</button>`;
+
+            // JavaScript example
+            jsCmd.innerHTML = `// Note: This won't work directly in the browser due to CORS
+// Use this in a Node.js environment or with a proxy
+
+fetch("https://weatherkit.apple.com/api/v1/weather/en-US/37.323/-122.032?dataSets=currentWeather", {
+  method: "GET",
+  headers: {
+    "Authorization": "Bearer ${token}",
+    "Accept": "application/json"
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data))
+.catch(error => console.error("Error:", error));<button class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700" id="copyJsBtn">Copy</button>`;
+
+            // Python example
+            pythonCmd.innerHTML = `import requests
+
+url = "https://weatherkit.apple.com/api/v1/weather/en-US/37.323/-122.032?dataSets=currentWeather"
+headers = {
+    "Authorization": "Bearer ${token}",
+    "Accept": "application/json"
+}
+
+response = requests.get(url, headers=headers)
+
+if response.status_code == 200:
+    data = response.json()
+    print(data)
+else:
+    print(f"Error: {response.status_code}")
+    print(response.text)<button class="copy-button absolute top-1 right-1 bg-gray-600 text-white border-0 rounded py-1 px-2 text-xs cursor-pointer hover:bg-gray-700" id="copyPythonBtn">Copy</button>`;
+
+            // Add event listeners again for the new buttons
+            document.getElementById('copyCurlBtn').addEventListener('click', () => {
+                copyToClipboard('curlCommand');
+            });
+
+            document.getElementById('copySwiftBtn').addEventListener('click', () => {
+                copyToClipboard('swiftCommand');
+            });
+
+            document.getElementById('copyJsBtn').addEventListener('click', () => {
+                copyToClipboard('jsCommand');
+            });
+
+            document.getElementById('copyPythonBtn').addEventListener('click', () => {
+                copyToClipboard('pythonCommand');
+            });
+
+            // Show the command section
+            document.getElementById('commandSection').classList.remove('hidden');
+        }
+
+        // Apply token to Swagger UI
+        function applyToken(token, expTime) {
+            // Store for future use
+            localStorage.setItem('weatherkit-jwt', token);
+            localStorage.setItem('weatherkit-exp', expTime.toString());
+
+            // Apply to Swagger UI
+            ui.authActions.authorize({
+                bearerAuth: {
+                    name: 'Authorization',
+                    schema: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+                    value: token // Don't include Bearer prefix, Swagger adds it
+                }
+            });
+
+            // Display token
+            document.getElementById('tokenDisplay').textContent = token;
+            document.getElementById('tokenSection').classList.remove('hidden');
+
+            // Update token status
+            updateTokenStatus(expTime);
+
+            // Update code examples
+            updateCodeExamples(token);
+        }
+
+        document.getElementById('jwtForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+
+            const teamId = document.getElementById('teamId').value.trim();
+            const serviceId = document.getElementById('serviceId').value.trim();
+            const keyId = document.getElementById('keyId').value.trim();
+            const fileInput = document.getElementById('privateKeyFile');
+
+            if (!teamId || !serviceId || !keyId) {
+                showMessage('Team ID, Service ID, and Key ID are required.', true);
+                return;
+            }
+
+            if (fileInput.files.length === 0) {
+                showMessage('Please upload your private key file.', true);
+                return;
+            }
+
+            // Save credentials
+            localStorage.setItem('weatherkit-teamId', teamId);
+            localStorage.setItem('weatherkit-serviceId', serviceId);
+            localStorage.setItem('weatherkit-keyId', keyId);
+
+            let pem;
+            try {
+                pem = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsText(fileInput.files[0]);
+                });
+
+                // Log the first few characters of the key for debugging
+                console.log('Key preview:', pem.substring(0, 50) + '...');
+            } catch (e) {
+                showMessage('Failed to read private key file: ' + e, true);
+                return;
+            }
+
+            try {
+                // Create JWT header - exactly as Apple requires
+                const header = {
+                    alg: 'ES256',
+                    kid: keyId,
+                    id: `${teamId}.${serviceId}`
+                };
+
+                // Create JWT payload with current timestamp
+                const now = Math.floor(Date.now() / 1000);
+                const exp = now + 300; // 5 minutes (per Apple's recommendation)
+                const payload = {
+                    iss: teamId,
+                    iat: now,
+                    exp: exp,
+                    sub: serviceId
+                };
+
+                // Log the JWT components for debugging
+                console.log('JWT Header:', header);
+                console.log('JWT Payload:', payload);
+
+                // Generate JWT
+                const jwt = KJUR.jws.JWS.sign(
+                    'ES256',
+                    JSON.stringify(header),
+                    JSON.stringify(payload),
+                    pem
+                );
+
+                // Log the generated JWT
+                console.log('Generated JWT:', jwt);
+
+                // Apply the token
+                applyToken(jwt, exp);
+
+                showMessage('JWT successfully generated and applied!', false);
+            } catch (e) {
+                console.error('JWT Generation Error:', e);
+                showMessage(`Failed to generate JWT: ${e.message}. Check console for details.`, true);
+            }
+        });
+    </script>
+</body>
+
+</html>

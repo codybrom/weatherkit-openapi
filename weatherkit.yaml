@@ -1,0 +1,394 @@
+openapi: 3.0.1
+info:
+  title: Apple WeatherKit REST API
+  version: "1.0.0"
+  description: |
+    Official Apple WeatherKit REST API specification. WeatherKit APIs are hosted at weatherkit.apple.com
+servers:
+  - url: https://weatherkit.apple.com/api/v1
+    description: Apple WeatherKit service
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        **Request authentication for WeatherKit REST API**
+        Create a developer token to access weather data:
+
+        **Create a private key and Service ID**
+        1. In your Apple Developer Account, navigate to Certificates, Identifiers & Profiles > Keys, then create and download a WeatherKit key.
+        2. Under Identifiers > Service IDs, click +, select Service IDs, set a description and identifier (e.g., `com.example.weatherkit-client`), then Register.
+
+        **Generate the developer token**
+        WeatherKit supports JWT (JSON Web Token). Construct a token with:
+        - **Header**:
+          - `alg`: ES256
+          - `kid`: <Your Key ID>
+          - `id`: `<Team ID>.<Service ID>`
+        - **Payload claims**:
+          - `iss`: <Your Team ID>
+          - `iat`: <Issued-at time (epoch seconds UTC)>
+          - `exp`: <Expiration time ≤ 5 minutes after `iat`>
+          - `sub`: <Your Service ID>
+        Sign this JWT with your WeatherKit private key using ES256 (ECDSA P-256 + SHA-256).
+
+        **Guidelines**
+        - Never distribute your private key; use a secure service to generate tokens.
+        - Keep expiration times short for security.
+
+        **Authorize requests**
+        Pass the token in the `Authorization` header:
+        ```bash
+        curl -v \
+          -H "Authorization: Bearer <developer token>" \
+          "https://weatherkit.apple.com/api/v1/availability/37.323/122.032?country=US"
+        ```
+  parameters:
+    language:
+      name: language
+      in: path
+      description: The language tag to use for localizing responses, e.g., `en-US`.
+      required: true
+      schema:
+        type: string
+    latitude:
+      name: latitude
+      in: path
+      description: Latitude of the location (–90 to 90).
+      required: true
+      schema:
+        type: number
+        format: double
+    longitude:
+      name: longitude
+      in: path
+      description: Longitude of the location (–180 to 180).
+      required: true
+      schema:
+        type: number
+        format: double
+    dataSets:
+      name: dataSets
+      in: query
+      description: |
+        Comma-separated list of datasets to include. Possible values:
+        `currentWeather`, `forecastHourly`, `forecastDaily`,
+        `forecastNextHour`, `weatherAlerts`
+      required: true
+      schema:
+        type: string
+    countryCode:
+      name: countryCode
+      in: query
+      description: ISO country code, e.g. `US`. This parameter is necessary for weather alerts.
+      required: false
+      schema:
+        type: string
+    timezone:
+      name: timezone
+      in: query
+      description: The name of the timezone to use for rolling up weather forecasts into daily forecasts, e.g. `America/New_York`.
+      required: false
+      schema:
+        type: string
+  schemas:
+    Weather:
+      type: object
+      description: The collection of all requested weather data.
+      properties:
+        currentWeather:
+          $ref: "#/components/schemas/CurrentWeather"
+        forecastDaily:
+          $ref: "#/components/schemas/DailyForecast"
+        forecastHourly:
+          $ref: "#/components/schemas/HourlyForecast"
+        forecastNextHour:
+          $ref: "#/components/schemas/NextHourForecast"
+        weatherAlerts:
+          $ref: "#/components/schemas/WeatherAlertCollection"
+
+    CurrentWeather:
+      type: object
+      description: The current weather conditions for the specified location.
+      properties:
+        asOf:
+          type: string
+          format: date-time
+          description: The date and time.
+        cloudCover:
+          type: number
+          description: The percentage of the sky covered with clouds during the period, from 0 to 1.
+        conditionCode:
+          type: string
+          description: An enumeration value indicating the condition at the time.
+        daylight:
+          type: boolean
+          description: A Boolean value indicating whether there is daylight.
+        humidity:
+          type: number
+          description: The relative humidity, from 0 to 1.
+        precipitationIntensity:
+          type: number
+          description: The precipitation intensity, in millimeters per hour.
+        pressure:
+          type: number
+          description: The sea level air pressure, in millibars.
+        pressureTrend:
+          type: string
+          enum: [rising, falling, steady]
+          description: The direction of change of the sea-level air pressure.
+        temperature:
+          type: number
+          description: The current temperature, in degrees Celsius.
+        temperatureApparent:
+          type: number
+          description: The feels-like temperature when factoring wind and humidity, in degrees Celsius.
+        temperatureDewPoint:
+          type: number
+          description: The temperature at which relative humidity is 100%, in Celsius.
+        uvIndex:
+          type: integer
+          description: The level of ultraviolet radiation.
+        visibility:
+          type: number
+          description: The distance at which terrain is visible, in meters.
+        windDirection:
+          type: integer
+          description: The direction of the wind, in degrees.
+        windGust:
+          type: number
+          description: The maximum wind gust speed, in kilometers per hour.
+        windSpeed:
+          type: number
+          description: The wind speed, in kilometers per hour.
+
+    DailyForecast:
+      type: object
+      description: The daily forecast for the requested location.
+      properties:
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayWeather"
+
+    DayWeather:
+      type: object
+      description: Weather forecast for a specific day.
+      properties:
+        forecastStart:
+          type: string
+          format: date-time
+        forecastEnd:
+          type: string
+          format: date-time
+        conditionCode:
+          type: string
+        temperatureMax:
+          type: number
+        temperatureMin:
+          type: number
+        precipitationChance:
+          type: number
+        sunriseTime:
+          type: string
+          format: date-time
+        sunsetTime:
+          type: string
+          format: date-time
+
+    HourlyForecast:
+      type: object
+      description: The hourly forecast for the requested location.
+      properties:
+        hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourWeather"
+
+    HourWeather:
+      type: object
+      description: Weather forecast for a specific hour.
+      properties:
+        forecastStart:
+          type: string
+          format: date-time
+        temperature:
+          type: number
+        conditionCode:
+          type: string
+        precipitationChance:
+          type: number
+        humidity:
+          type: number
+        windSpeed:
+          type: number
+
+    NextHourForecast:
+      type: object
+      description: The next hour forecast for the requested location.
+      properties:
+        minutes:
+          type: array
+          items:
+            $ref: "#/components/schemas/MinuteWeather"
+        summary:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrecipitationForecast"
+
+    MinuteWeather:
+      type: object
+      description: Weather forecast for a specific minute.
+      properties:
+        startTime:
+          type: string
+          format: date-time
+        precipitationChance:
+          type: number
+        precipitationIntensity:
+          type: number
+
+    PrecipitationForecast:
+      type: object
+      description: Precipitation forecast for a time period.
+      properties:
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        precipitationType:
+          type: string
+          enum: [clear, precipitation, rain, snow, sleet, hail, mixed]
+        precipitationChance:
+          type: number
+        precipitationIntensity:
+          type: number
+
+    WeatherAlertCollection:
+      type: object
+      description: Weather alerts for the requested location.
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherAlert"
+
+    WeatherAlert:
+      type: object
+      description: A weather alert for a specific area.
+      properties:
+        detailsUrl:
+          type: string
+          format: uri
+        effectiveTime:
+          type: string
+          format: date-time
+        expireTime:
+          type: string
+          format: date-time
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [extreme, severe, moderate, minor, unknown]
+        source:
+          type: string
+        area:
+          type: array
+          items:
+            type: string
+paths:
+  /weather/{language}/{latitude}/{longitude}:
+    get:
+      summary: Obtain weather data for a specified location.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/language"
+        - $ref: "#/components/parameters/latitude"
+        - $ref: "#/components/parameters/longitude"
+        - $ref: "#/components/parameters/dataSets"
+        - $ref: "#/components/parameters/countryCode"
+        - $ref: "#/components/parameters/timezone"
+        - name: currentAsOf
+          in: query
+          description: The time to obtain current conditions. Defaults to now.
+          schema:
+            type: string
+            format: date-time
+        - name: dailyStart
+          in: query
+          description: The time to start the daily forecast. If this parameter is absent, daily forecasts start on the current day.
+          schema:
+            type: string
+            format: date-time
+        - name: dailyEnd
+          in: query
+          description: The time to end the daily forecast. If this parameter is absent, daily forecasts run for 10 days.
+          schema:
+            type: string
+            format: date-time
+        - name: hourlyStart
+          in: query
+          description: The time to start the hourly forecast. If this parameter is absent, hourly forecasts start on the current hour.
+          schema:
+            type: string
+            format: date-time
+        - name: hourlyEnd
+          in: query
+          description: The time to end the hourly forecast. If this parameter is absent, hourly forecasts run 24 hours or the length of the daily forecast, whichever is longer.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Successful response returns an object keyed by requested datasets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Weather"
+        "400":
+          description: Bad Request - The server is unable to process the request due to an invalid parameter value.
+        "401":
+          description: Unauthorized - The request isn't authorized or doesn't include the correct authentication information.
+
+  /availability/{latitude}/{longitude}:
+    get:
+      summary: Determine the data sets available for the specified location.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/latitude"
+        - $ref: "#/components/parameters/longitude"
+        - name: country
+          in: query
+          description: ISO country code, e.g. `US`.
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response returns available datasets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentWeather:
+                    type: boolean
+                  forecastHourly:
+                    type: boolean
+                  forecastDaily:
+                    type: boolean
+                  forecastNextHour:
+                    type: boolean
+                  weatherAlerts:
+                    type: boolean
+
+externalDocs:
+  description: Official WeatherKit REST API Documentation
+  url: https://developer.apple.com/documentation/weatherkitrestapi/
