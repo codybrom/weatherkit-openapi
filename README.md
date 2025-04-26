@@ -1,8 +1,8 @@
-# WeatherKit Swagger UI
+# WeatherKit OpenAPI & Swagger UI
 
 An OpenAPI 3 spec for Apple’s WeatherKit REST API, rendered with Swagger UI and published via GitHub Pages.
 
-🔗 Live demo: <https://codybrom.github.io/weatherkit-swagger/>
+🔗 Live demo: <https://codybrom.github.io/weatherkit-openapi/>
 
 ## Usage
 
