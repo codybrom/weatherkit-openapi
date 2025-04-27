@@ -53,6 +53,7 @@ components:
       required: true
       schema:
         type: string
+        example: en-US
     latitude:
       name: latitude
       in: path
@@ -61,6 +62,7 @@ components:
       schema:
         type: number
         format: double
+        example: 37.323
     longitude:
       name: longitude
       in: path
@@ -69,16 +71,24 @@ components:
       schema:
         type: number
         format: double
+        example: -122.032
     dataSets:
       name: dataSets
       in: query
-      description: |
-        Comma-separated list of datasets to include. Possible values:
-        `currentWeather`, `forecastHourly`, `forecastDaily`,
-        `forecastNextHour`, `weatherAlerts`
+      description: List of datasets to include in the response.
       required: true
+      style: form
+      explode: false
       schema:
-        type: string
+        type: array
+        items:
+          type: string
+          enum:
+            - currentWeather
+            - forecastHourly
+            - forecastDaily
+            - forecastNextHour
+            - weatherAlerts
     countryCode:
       name: countryCode
       in: query
@@ -86,6 +96,7 @@ components:
       required: false
       schema:
         type: string
+        example: US
     timezone:
       name: timezone
       in: query
@@ -281,6 +292,10 @@ components:
       type: object
       description: A weather alert for a specific area.
       properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the weather alert.
         detailsUrl:
           type: string
           format: uri
@@ -301,6 +316,24 @@ components:
           type: array
           items:
             type: string
+        urgency:
+          type: string
+          enum: [immediate, expected, future, past, unknown]
+        responseType:
+          type: string
+          enum:
+            [
+              shelter,
+              evacuate,
+              prepare,
+              execute,
+              avoid,
+              monitor,
+              assess,
+              allClear,
+              none,
+            ]
+
 paths:
   /weather/{language}/{latitude}/{longitude}:
     get:
@@ -388,6 +421,35 @@ paths:
                     type: boolean
                   weatherAlerts:
                     type: boolean
+
+  /weatherAlert/{language}/{id}:
+    get:
+      summary: Receive an active weather alert.
+      description: Retrieve a specific weather alert by its unique identifier.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/language"
+        - name: id
+          in: path
+          description: The unique identifier for the weather alert.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK - The request is successful. The weather alert is in the response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherAlert"
+        "400":
+          description: Bad Request - The server is unable to process the request due to an invalid parameter value.
+        "401":
+          description: Unauthorized - The request isn't authorized or doesn't include the correct authentication information.
+        "404":
+          description: Not Found - There's no active alert for the specified unique identifier.
 
 externalDocs:
   description: Official WeatherKit REST API Documentation
