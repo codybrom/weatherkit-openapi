@@ -200,13 +200,86 @@
         </div>
     </div>
 
+    <div id="cors-warning"
+        class="my-4 bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-r text-sm text-gray-800 hidden">
+        <strong>CORS Warning:</strong> Due to browser security restrictions, API requests cannot be made directly from
+        this page.
+        Use the generated code examples with your JWT token in a server-side application instead.
+    </div>
+
     <div id="swagger-ui"></div>
 
     <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
     <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>
 
     <script>
-        // Initialize Swagger UI with request interceptor to fix headers
+        // Custom plugin to override the Execute button
+        const BuildQueryOnlyPlugin = function () {
+            return {
+                statePlugins: {
+                    spec: {
+                        wrapSelectors: {
+                            allowTryItOutFor: () => () => true
+                        }
+                    }
+                },
+                components: {
+                    // Override the Execute button
+                    TryItOutButton: (Original, { React }) => (props) => {
+                        // Return the original button with modified onClick
+                        return React.createElement(Original, {
+                            ...props,
+                            onExecute: (e) => {
+                                // When clicked, instead of executing the request
+                                document.getElementById('cors-warning').classList.remove('hidden');
+
+                                // Get request details from the UI
+                                const req = props.operation.toJS();
+                                const path = req.path;
+                                const method = req.method;
+                                const parameters = req.parameters || [];
+                                const values = {};
+
+                                // Collect parameter values
+                                parameters.forEach(param => {
+                                    if (param.value !== undefined) {
+                                        values[param.name] = param.value;
+                                    }
+                                });
+
+                                // Build a "fake" response
+                                const fakeResponse = {
+                                    url: path,
+                                    method: method.toUpperCase(),
+                                    parameters: values,
+                                    headers: {
+                                        "Authorization": "Bearer [your token]",
+                                        "Content-Type": "application/json"
+                                    }
+                                };
+
+                                // Display the request info but don't actually send it
+                                props.onResponse({
+                                    status: 200,
+                                    statusText: "OK (CORS Preview - Request not sent)",
+                                    data: fakeResponse,
+                                    headers: {},
+                                    ok: true,
+                                    text: JSON.stringify(fakeResponse, null, 2)
+                                });
+
+                                e.preventDefault();
+                                return false;
+                            }
+                        });
+                    }
+                }
+            };
+        };
+
+
+
+        // Replace your SwaggerUI initialization with this simpler version
         const ui = SwaggerUIBundle({
             url: "weatherkit.yaml",
             dom_id: "#swagger-ui",
@@ -216,20 +289,82 @@
                 SwaggerUIStandalonePreset
             ],
             plugins: [
-                SwaggerUIBundle.plugins.DownloadUrl
+                SwaggerUIBundle.plugins.DownloadUrl,
+                BuildQueryOnlyPlugin
             ],
             layout: "StandaloneLayout",
-            requestInterceptor: (req) => {
-                // Fix Authorization header if needed
-                if (req.headers && req.headers.Authorization) {
-                    // Make sure it has the Bearer prefix only once
-                    if (req.headers.Authorization.startsWith('Bearer Bearer ')) {
-                        req.headers.Authorization = req.headers.Authorization.replace('Bearer Bearer ', 'Bearer ');
-                    }
-                }
-                return req;
-            }
+            // Keep this simple at first - just enough to show the API docs
+            tryItOutEnabled: true
         });
+
+        // After the UI is loaded, we can set up our request interceptors
+        ui.getSystem().configsActions.loaded();
+
+        // Now override the fetch function to prevent actual API calls
+        const originalFetch = window.fetch;
+        window.fetch = function (input, init) {
+            // Only intercept requests to the WeatherKit API
+            if (input && typeof input === 'string' && input.includes('weatherkit.apple.com')) {
+                console.log('Intercepting API request to:', input);
+
+                // Create a fake successful response
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    statusText: "OK (Preview Mode - No request was sent to the API)",
+                    headers: {
+                        get: (name) => name === 'content-type' ? 'application/json' : null
+                    },
+                    json: () => Promise.resolve({
+                        _requestDetails: {
+                            url: input,
+                            method: init?.method || 'GET',
+                            headers: init?.headers || {}
+                        },
+                        _notice: "This is a preview. Due to CORS restrictions, no actual request was sent to the WeatherKit API.",
+                        _help: "Use the code examples from the JWT panel to make real requests."
+                    }),
+                    text: () => Promise.resolve(JSON.stringify({
+                        _requestDetails: {
+                            url: input,
+                            method: init?.method || 'GET',
+                            headers: init?.headers || {}
+                        },
+                        _notice: "This is a preview. Due to CORS restrictions, no actual request was sent to the WeatherKit API.",
+                        _help: "Use the code examples from the JWT panel to make real requests."
+                    }, null, 2))
+                });
+            }
+
+            // For other requests (like loading the OpenAPI spec), use the original fetch
+            return originalFetch.apply(this, arguments);
+        };
+
+        // Add a warning banner above Swagger UI
+        document.addEventListener('DOMContentLoaded', () => {
+            const swaggerElement = document.getElementById('swagger-ui');
+
+            const warningBanner = document.createElement('div');
+            warningBanner.className = 'bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4';
+            warningBanner.innerHTML = `
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-yellow-700">
+                    <strong>Preview Mode:</strong> Due to browser security restrictions (CORS), the "Try it out" feature will build requests but not actually send them to the API.
+                    Use the code examples from the JWT panel with your token to make real requests.
+                </p>
+            </div>
+        </div>
+    `;
+
+            swaggerElement.parentNode.insertBefore(warningBanner, swaggerElement);
+        });
+
 
         // Load saved credentials
         document.addEventListener('DOMContentLoaded', () => {
